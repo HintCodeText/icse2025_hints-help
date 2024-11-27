@@ -1,6 +1,7 @@
+import os
 import pandas as pd
 import numpy as np
-from scipy.stats import sem, ranksums
+from scipy.stats import sem, ranksums, ks_2samp
 from itertools import product
 from typing import List, Optional
 
@@ -37,14 +38,28 @@ def get_plot_data(
     none_scores = stats["No Hint"]["scores"]
     for hint_type in stats:
         if hint_type != "none":
-            p_val = ranksums(
-                none_scores, stats[hint_type]["scores"], alternative="less"
-            ).pvalue
-            if p_val > 0.05:
+            _, p_value_ks = ks_2samp(none_scores, stats[hint_type]["scores"])
+            print(f"{stimuli}-{part}-{hint_type}")
+            if p_value_ks > 0.05:
                 p_val = ranksums(
-                    none_scores, stats[hint_type]["scores"], alternative="greater"
+                    none_scores, stats[hint_type]["scores"], alternative="less"
                 ).pvalue
-            p_values[hint_type] = p_val
+                print(
+                    f"\tWilcoxon rank-sum test for '{part}-{stimuli}-{hint_type}': {p_val}"
+                )
+                if p_val > 0.05:
+                    p_val = ranksums(
+                        none_scores, stats[hint_type]["scores"], alternative="greater"
+                    ).pvalue
+                p_values[hint_type] = p_val
+            else:
+                p_values[hint_type] = 999
+
+            effect_size = cohen_d(stats[hint_type]["scores"], none_scores)
+            print(f"\tCohen's d for '{hint_type}': {effect_size}")
+            print(
+                f"\tDifference of means: {np.mean(stats[hint_type]['scores'])-np.mean(none_scores)}"
+            )
 
     # Prepare data for plotting
     plot_data = pd.DataFrame(
@@ -225,12 +240,18 @@ def plot_compare_hint_types_across_stimuli_participants(
 
     plt.tight_layout(rect=[0, 0, 0.98, 1])
 
+    os.makedirs(f"figures", exist_ok=True)
     plt.savefig(f"figures/{save_path}", bbox_inches="tight", dpi=75)
-    plt.savefig(f"figures/{save_path}.pdf", format="pdf", bbox_inches="tight", dpi=75)
+    plt.savefig(
+        f"figures/{save_path}.pdf",
+        format="pdf",
+        bbox_inches="tight",
+        dpi=75,
+    )
 
 
 def main():
-    analysis_df = pd.read_csv("analysis_data.csv")
+    analysis_df = pd.read_csv(f"avg_analysis_data.csv")
     df_to_plot = analysis_df.copy()
 
     setup_plotting(scale=3)

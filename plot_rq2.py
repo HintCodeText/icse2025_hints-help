@@ -1,8 +1,9 @@
 from utils import *
 
+import os
 import pandas as pd
 import numpy as np
-from scipy.stats import sem, ranksums
+from scipy.stats import sem, ranksums, ks_2samp
 from itertools import product
 from typing import List, Optional
 
@@ -39,10 +40,21 @@ def get_plot_data(
         none_scores = stats[("No Hint", stim_pres, part_lbl)]["scores"]
         hint_scores = stats[("Any Hint", stim_pres, part_lbl)]["scores"]
 
-        p_val = ranksums(none_scores, hint_scores, alternative="less").pvalue
-        if p_val > 0.05:
-            p_val = ranksums(none_scores, hint_scores, alternative="greater").pvalue
-        p_values[(stim_pres, part_lbl)] = p_val
+        _, p_value_ks = ks_2samp(none_scores, hint_scores)
+
+        if p_value_ks > 0.05:
+            p_val = ranksums(none_scores, hint_scores, alternative="less").pvalue
+            print(f"Ranksum P-Value: {p_val}")
+            if p_val > 0.05:
+                p_val = ranksums(none_scores, hint_scores, alternative="greater").pvalue
+            p_values[(stim_pres, part_lbl)] = p_val
+        else:
+            p_values[(stim_pres, part_lbl)] = 999
+
+        ## Print effect size
+        effect_size = cohen_d(hint_scores, none_scores)
+        print(f"\tCohen's d for '{stim_pres}-{part_lbl}': {effect_size}")
+        print(f"\tDifference of Means: {mean(hint_scores) - mean(none_scores)}")
 
     plot_data = []
     for hint_type, stim_pres, part_lbl in product(
@@ -169,6 +181,7 @@ def plot_compare_hints_across_stimuli_participants(
         plt.axhline(y=chance_perf, color="r", linestyle="--")
 
     plt.tight_layout()
+    os.makedirs(f"figures", exist_ok=True)
     plt.savefig(f"figures/{save_path}", bbox_inches="tight", dpi=75)
     plt.savefig(
         f"figures/{save_path}.pdf",
@@ -179,7 +192,7 @@ def plot_compare_hints_across_stimuli_participants(
 
 
 def main():
-    analysis_df = pd.read_csv("analysis_data.csv")
+    analysis_df = pd.read_csv(f"avg_analysis_data.csv")
     df_to_plot = analysis_df.copy()
 
     setup_plotting()

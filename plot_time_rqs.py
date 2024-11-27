@@ -1,11 +1,13 @@
 import pandas as pd
 import numpy as np
-from scipy.stats import sem, ranksums
+from scipy.stats import sem, ranksums, ks_2samp
 from itertools import product
 from typing import List, Optional
 from matplotlib.axes import Axes
+import matplotlib.pyplot as plt
 
 from utils import *
+import os
 
 
 def get_avg_time_with_hints_stats(
@@ -38,18 +40,6 @@ def get_avg_time_with_hints_stats(
 
         stats[key] = {"mean": scores.mean(), "sem": sem(scores), "scores": scores}
 
-    sc1 = df_to_plot[
-        (df_to_plot["hint_type"] == "No Hint")
-        & (df_to_plot["part_lbl"] == "Clear")
-        & (df_to_plot["stimulus_presentation"] == "Python")
-    ][y_label]
-
-    sc2 = df_to_plot[
-        (df_to_plot["hint_type"] == "No Hint")
-        & (df_to_plot["part_lbl"] == "Clear")
-        & (df_to_plot["stimulus_presentation"] == "Text")
-    ][y_label]
-
     return stats
 
 
@@ -58,18 +48,10 @@ def plot_compare_avg_time_with_hints(
     y_label: str,
     y_title: str,
     ax: Axes,
-    corr_filt: bool = False,
     cb_palette: Optional[List] = None,
     chance_perf: Optional[float] = None,
     ylim: Optional[float] = None,
 ):
-    if corr_filt:
-        df_to_plot = df_to_plot[
-            (df_to_plot["score_quant2"] == 1)
-            & (df_to_plot["score_quant3"] == 1)
-            & (df_to_plot["score_quant4"] == 1)
-        ].copy()
-
     stats = get_avg_time_with_hints_stats(df_to_plot, y_label)
 
     bar_width = 0.3
@@ -80,6 +62,8 @@ def plot_compare_avg_time_with_hints(
     for i, stimuli in enumerate(STIMULUS_ORDER):
         for j, part_lbl in enumerate(PART_LABELS):
 
+            print(f"Stimuli: {stimuli}, Part: {part_lbl}")
+
             none_key = ("No Hint", stimuli, part_lbl)
             any_exp_key = ("Any Hint", stimuli, part_lbl)
 
@@ -88,17 +72,27 @@ def plot_compare_avg_time_with_hints(
             any_exp_value = stats[any_exp_key]["mean"]
             any_exp_sem = stats[any_exp_key]["sem"]
 
-            p_value = ranksums(
+            _, p_value_ks = ks_2samp(
                 stats[none_key]["scores"],
                 stats[any_exp_key]["scores"],
-                alternative="less",
-            ).pvalue
-            if p_value > 0.05:
+                alternative="greater",
+            )
+            if p_value_ks > 0.05:
                 p_value = ranksums(
                     stats[none_key]["scores"],
                     stats[any_exp_key]["scores"],
                     alternative="greater",
                 ).pvalue
+            else:
+                p_value = 999
+
+            print(f"\tp-value (none great) for {stimuli} and {part_lbl}: {p_value}")
+            print(
+                f'\tEffect Size: {cohen_d(stats[none_key]["scores"],stats[any_exp_key]["scores"])}'
+            )
+            print(
+                f"\tDifference of means: {none_value-any_exp_value} [Means: {none_value} vs {any_exp_value}]"
+            )
 
             if any_exp_value - none_value >= 0:
                 ax.bar(
@@ -162,10 +156,20 @@ def plot_compare_avg_time_with_hints(
     # Add significance testing between Python and Text for No Hint
     python_no_hint = stats[("No Hint", "Python", "Clear")]["scores"]
     text_no_hint = stats[("No Hint", "Text", "Clear")]["scores"]
-    p_value_stimulus = ranksums(python_no_hint, text_no_hint, alternative="less").pvalue
+
+    p_value_ks = ks_2samp(text_no_hint, python_no_hint, alternative="greater").pvalue
+    if p_value_ks > 0.05:
+        p_value_stimulus = ranksums(
+            text_no_hint, python_no_hint, alternative="greater"
+        ).pvalue
+        print(f"P-value (Python < Text) for No Hint: {p_value_stimulus}")
+        print(f"\tEffect Size: {cohen_d(text_no_hint,python_no_hint)}")
+        print(f"\tDifference of means: {mean(text_no_hint)-mean(python_no_hint)}")
+    else:
+        p_value_stimulus = 999
 
     if p_value_stimulus < 0.05:
-        buffer = 0.45
+        buffer = 0.38
         stars = get_asterisks(p_value_stimulus)
         bar_centers = [r1[0], r1[0] + bar_width]
         bar_heights = [
@@ -215,19 +219,11 @@ def plot_compare_avg_time_with_hints_across_stimuli(
     df_to_plot: pd.DataFrame,
     y_label: str,
     y_title: str,
-    axes: Axes,
-    corr_filt: bool = False,
+    axes: List[Axes],
     cb_palette: Optional[List] = None,
     chance_perf: Optional[float] = None,
     ylim: Optional[float] = None,
 ):
-    if corr_filt:
-        df_to_plot = df_to_plot[
-            (df_to_plot["score_quant2"] == 1)
-            & (df_to_plot["score_quant3"] == 1)
-            & (df_to_plot["score_quant4"] == 1)
-        ].copy()
-
     titles = ["(b)", "(c)"]
     for i, (stimuli, part_lbl) in enumerate(product(STIMULUS_ORDER, PART_LABELS)):
         ax = axes[i]
@@ -246,6 +242,8 @@ def plot_compare_avg_time_with_hints_across_stimuli(
             for hint_type in HINT_ORDER
         }
 
+        print(f"Stimuli: {stimuli}, Part: {part_lbl}")
+
         for hint_type in stats:
             stats[hint_type].update(
                 {
@@ -257,15 +255,29 @@ def plot_compare_avg_time_with_hints_across_stimuli(
         none_scores = stats["No Hint"]["scores"]
         p_values = {}
         for hint_type in stats:
+            print(f"\tHint Type: {hint_type}")
             if hint_type != "No Hint":
-                p_val = ranksums(
-                    none_scores, stats[hint_type]["scores"], alternative="less"
-                ).pvalue
-                if p_val > 0.05:
+
+                _, p_value_ks = ks_2samp(
+                    none_scores, stats[hint_type]["scores"], alternative="greater"
+                )
+                if p_value_ks > 0.05:
                     p_val = ranksums(
-                        none_scores, stats[hint_type]["scores"], alternative="greater"
+                        none_scores,
+                        stats[hint_type]["scores"],
+                        alternative="greater",
                     ).pvalue
-                p_values[hint_type] = p_val
+                    p_values[hint_type] = p_val
+                else:
+                    p_values[hint_type] = 999
+
+                print(f"\t\tWilcoxon rank-sum test: {p_values[hint_type]}")
+                print(
+                    f'\t\tEffect Size: {cohen_d(none_scores,stats[hint_type]["scores"])}'
+                )
+                print(
+                    f'\t\tDifference of means: {stats["No Hint"]["mean"]-stats[hint_type]["mean"]}'
+                )
 
         plot_data = pd.DataFrame(
             {
@@ -361,7 +373,6 @@ def plot_compare_avg_time_across_conditions(
     y_label: str,
     y_title: str,
     save_path: str,
-    corr_filt: bool = False,
     cb_palette: Optional[List] = None,
     chance_perf: Optional[float] = None,
     ylim: Optional[float] = None,
@@ -373,7 +384,6 @@ def plot_compare_avg_time_across_conditions(
         y_label=y_label,
         y_title=y_title,
         ax=axes[0],
-        corr_filt=corr_filt,
         chance_perf=chance_perf,
         cb_palette=cb_palette,
         ylim=ylim,
@@ -384,7 +394,6 @@ def plot_compare_avg_time_across_conditions(
         y_label=y_label,
         y_title=y_title,
         axes=axes[1:],
-        corr_filt=corr_filt,
         cb_palette=cb_palette,
         chance_perf=chance_perf,
         ylim=ylim,
@@ -409,26 +418,29 @@ def plot_compare_avg_time_across_conditions(
 
     # Adjust layout and save
     plt.tight_layout()
+    os.makedirs(f"figures", exist_ok=True)
     plt.savefig(f"figures/{save_path}", bbox_inches="tight", dpi=150)
     plt.savefig(f"figures/{save_path}.pdf", format="pdf", bbox_inches="tight")
 
 
 def main():
-    analysis_df = pd.read_csv("analysis_data.csv")
-    df_to_plot = analysis_df.copy()
 
+    analysis_df = pd.read_csv(f"filtered_avg_analysis_data.csv")
+    df_to_plot = analysis_df.copy()
     setup_plotting()
+
+    time_col = "quant_ques_af_exp_time_avg"
+    save_path = "rqs_time_plot"
 
     plot_compare_avg_time_across_conditions(
         df_to_plot,
-        save_path="rqs_time_plot",
+        save_path=save_path,
         x_label="part_lbl",
-        y_label="quant_ques_af_exp_time_avg",
+        y_label=time_col,
         y_title=r"Q2 -- Q4 Average Time (Minutes)",
         chance_perf=None,
-        corr_filt=True,
         cb_palette=cb_palette,
-        ylim=2.00,
+        ylim=2.2,
     )
 
 

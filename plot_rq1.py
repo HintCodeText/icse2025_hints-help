@@ -1,8 +1,9 @@
 from utils import *
 
+import os
 import pandas as pd
 import numpy as np
-from scipy.stats import sem, ranksums
+from scipy.stats import sem, ranksums, ks_2samp
 from typing import List, Optional
 
 
@@ -66,10 +67,24 @@ def plot_compare_stimuli_across_participants(
         sub_df = plot_df[plot_df[x_label] == label]
         text_scores = sub_df[sub_df["stimulus_presentation"] == "Text"][y_label]
         python_scores = sub_df[sub_df["stimulus_presentation"] == "Python"][y_label]
-        _, p_value = ranksums(python_scores, text_scores, alternative="less")
-        if p_value > 0.05:  ## Check both ways
-            _, p_value = ranksums(python_scores, text_scores, alternative="greater")
-        p_values[label] = p_value
+
+        _, p_value_ks = ks_2samp(python_scores, text_scores)
+
+        if p_value_ks > 0.05:
+            _, p_value = ranksums(python_scores, text_scores, alternative="less")
+            if p_value > 0.05:
+                _, p_value = ranksums(python_scores, text_scores, alternative="greater")
+            p_values[label] = p_value
+        else:
+            p_values[label] = 999
+
+        ## Calculate Effect Size
+        print(f'P-Value for "{label}": {p_values[label]:.3f}')
+        effect_size = cohen_d(text_scores, python_scores)
+        print(f"\tCohen's d for '{label}': {effect_size:.3f}")
+        print(
+            f"\tDifference of means: {np.mean(text_scores) - np.mean(python_scores):.3f}"
+        )
 
     ax.set_xlabel("")
     ax.set_ylabel(y_title, labelpad=15)
@@ -112,15 +127,21 @@ def plot_compare_stimuli_across_participants(
         ax.set_ylim(0, ylim)
 
     plt.tight_layout()
+    os.makedirs(f"figures", exist_ok=True)
     plt.savefig(f"figures/{save_path}", bbox_inches="tight", dpi=75)
-    plt.savefig(f"figures/{save_path}.pdf", format="pdf", bbox_inches="tight", dpi=75)
+    plt.savefig(
+        f"figures/{save_path}.pdf",
+        format="pdf",
+        bbox_inches="tight",
+        dpi=75,
+    )
 
     return p_values
 
 
 def main():
     ## Load the Dataframe
-    analysis_df = pd.read_csv("analysis_data.csv")
+    analysis_df = pd.read_csv(f"avg_analysis_data.csv")
     df_to_plot = analysis_df[analysis_df["hint_type"] == "No Hint"]
 
     setup_plotting()

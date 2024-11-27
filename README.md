@@ -9,7 +9,9 @@ You can install the required packages using:
 `pip install -r requirements.txt`
 
 ### Contents
-- `analysis_data.csv`: The raw dataset used for all analysis and visualizations
+- `analysis_data.csv`: The raw dataset
+- `avg_analysis_data.csv`: The dataset with one response per participant, used for accuracy visualizations.
+- `filtered_avg_analysis_data.csv`: The dataset containing responses that get Q2,Q3,Q4 right, used for response time analysis.
 - `plot_rq1.py`: Python script to generate Figure-3 in the paper.
 - `plot_rq2.py`: Python script to generate Figure-4 in the paper.
 - `plot_rq3.py`: Python script to generate Figure-5 in the paper.
@@ -51,11 +53,13 @@ This dataset contains information about participants' performance on programming
 
 <img src="figures/h1_v_h2_analysis.png" width="500" alt="Investigating the relationship between self-reported programming expierence scores, and average performance on Q2-Q4.">
 
-We conducted a preliminary investigation by analyzing participants divided into three groups based on self-reported programming proficiency: low, medium, and high experience. Our findings reveal that participants across all experience levels performed better with text-based representations than with Python. This effect was significant for those with low and medium programming experience (p-value: 0.013 and 0.035, respectively).
+We conducted a preliminary investigation by analyzing participants divided into three groups based on self-reported programming proficiency: low, medium, and high experience. Our findings reveal that participants across all experience levels performed better with text-based representations than with Python. This effect was significant for those with low programming experience (p-value: 0.021, effect-size: 0.452, difference of means: 0.08).
 
-### Quantitative Questions Examples
+### Stimuli Details
 
-Here, we present questions along with the answer choices for the "Palindrome String" algorithmic task illustrated in Figure 1 of the main paper.
+We present all the problem examples for each algorithmic task in the directory `stimuli/`. Specifically, for all examples, we provide: the problem description, quantitative question-answer pairs (Q&A1, Q&A2, Q&A3, Q&A4), the Python program representation, the text-based program representation, and the three distinct hint conditions. The directory is organized into subdirectories: `python_data`, `text_data`, `explanation_data`, and `quantitative_data`. Each subdirectory contains folders for specific algorithmic tasks, housing the corresponding stimuli (e.g., Python data, text data, explanation data) for all problems related to those tasks.
+
+Below, we present questions along with the answer choices for the "Palindrome String" algorithmic task illustrated in Figure 1 of the main paper.
 
 Q1. Select the expected output of a correct algorithm for the following test case: racecar
 ```gray

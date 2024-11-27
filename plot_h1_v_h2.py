@@ -2,7 +2,7 @@ from utils import *
 
 import pandas as pd
 import numpy as np
-from scipy.stats import sem, ranksums
+from scipy.stats import sem, ranksums, ks_2samp
 from typing import List, Optional
 
 
@@ -70,12 +70,23 @@ def plot_compare_prog_exp_across_stimuli(
 
     for label in x_labels:
         sub_df = plot_df[plot_df[x_label] == label]
+
         text_scores = sub_df[sub_df["stimulus_presentation"] == "Text"][y_label]
         python_scores = sub_df[sub_df["stimulus_presentation"] == "Python"][y_label]
-        _, p_value = ranksums(python_scores, text_scores, alternative="less")
-        if p_value > 0.05:  ## Check both ways
-            _, p_value = ranksums(python_scores, text_scores, alternative="greater")
-        p_values[label] = p_value
+        print(f"{len(sub_df)} participants in {label}")
+        print(f"{len(text_scores)} participants in Text")
+        print(f"{len(python_scores)} participants in Python")
+
+        _, p_value_ks = ks_2samp(python_scores, text_scores)
+        if p_value_ks > 0.05:
+            _, p_value = ranksums(python_scores, text_scores, alternative="less")
+            p_values[label] = p_value
+        else:
+            p_values[label] = 999
+
+        print(f"p-value for {label}: {p_value}")
+        print(f"\tCohen's d for {label}: {cohen_d(text_scores, python_scores)}")
+        print(f"\tDifference of means: {np.mean(text_scores)-np.mean(python_scores)}")
 
     ax.set_xlabel("")
     ax.set_ylabel(y_title, labelpad=15)
@@ -127,7 +138,7 @@ def plot_compare_prog_exp_across_stimuli(
 
 def main():
     ## Load the Dataframe
-    analysis_df = pd.read_csv("analysis_data.csv")
+    analysis_df = pd.read_csv("avg_analysis_data.csv")
     df_to_plot = analysis_df[
         (analysis_df["hint_type"] == "No Hint") & (analysis_df["part_lbl"] == "Clear")
     ]
